@@ -1,94 +1,128 @@
 # Linux Screen Autorotate
 
-This repository provides a Bash script to automatically rotate your Linux screen and touchscreen input based on device orientation. It utilizes the accelerometer data from your device via `iio-sensor-proxy` and applies the appropriate screen rotation using `xrandr` and `xinput`.
+A Bash utility that automatically rotates your Linux screen and touchscreen
+input based on device orientation. It reads accelerometer data via
+`iio-sensor-proxy` and applies the correct rotation with `xrandr` and
+`xinput`.
+
+## Project Structure
+
+```
+linux-screen-autorotate/
+├── config/
+│   └── config.conf      # User-editable configuration (display name, log path)
+├── lib/
+│   └── rotate.sh        # Rotation library (rotate function)
+├── src/
+│   └── autorotate.sh    # Main entry-point script
+├── install.sh           # Automated installation script
+└── README.md
+```
 
 ## Features
 
-- **Automatic Screen Rotation:** Detects device orientation changes and rotates the display accordingly.
-- **Touchscreen Re-mapping:** Maps touchscreen input to the rotated display.
-- **Startup Integration:** Can be set to run automatically on login.
+- **Automatic screen rotation** – detects orientation changes and rotates the
+  display accordingly.
+- **Dynamic input remapping** – remaps all `xinput` devices to the rotated
+  display automatically.
+- **Configurable** – display name and log path are kept in a separate
+  configuration file.
+- **Startup integration** – `install.sh` creates an XDG autostart entry so the
+  script runs on every login.
 
 ## Prerequisites
 
-- Linux system with an accelerometer (most laptops and tablets)
-- Packages:
+- Linux with an accelerometer (most modern laptops and tablets)
+- Required packages:
   - `iio-sensor-proxy`
   - `inotify-tools`
-  - `xrandr`
+  - `x11-xserver-utils` (provides `xrandr`)
   - `xinput`
 
 ## Installation
 
-1. **Install Dependencies:**
+### Automated
+
+```bash
+git clone https://github.com/carmelolg/linux-screen-autorotate.git
+cd linux-screen-autorotate
+bash install.sh
+```
+
+`install.sh` will:
+1. Install the required packages via `apt-get`.
+2. Copy the project to `/opt/linux-screen-autorotate`.
+3. Create an XDG autostart entry at `~/.config/autostart/autorotate.desktop`.
+
+### Manual
+
+1. **Install dependencies:**
 
    ```bash
    sudo apt-get install iio-sensor-proxy inotify-tools x11-xserver-utils xinput
    ```
 
-2. **Clone the Repository:**
+2. **Clone the repository:**
 
    ```bash
    git clone https://github.com/carmelolg/linux-screen-autorotate.git
    cd linux-screen-autorotate
    ```
 
-3. **Edit the Script:**
+3. **Edit the configuration:**
 
-   - Set your display name (`DNAME`) in the script. You can find it using `xrandr`.
-   - Optionally, adjust the touchscreen device detection if your device is not detected automatically.
+   Open `config/config.conf` and set `DNAME` to your display name (find it
+   with `xrandr`).
 
-4. **Add to Startup:**
+4. **Make the script executable:**
 
-   - Make the script executable:
-     ```bash
-     chmod +x autorotate.sh
-     ```
-   - Add it to your desktop environment's startup applications.
+   ```bash
+   chmod +x src/autorotate.sh
+   ```
+
+5. **Add to startup:**
+
+   Add `src/autorotate.sh` to your desktop environment's startup applications.
 
 ## Usage
 
-To run the script manually:
+Run manually:
 
 ```bash
-./autorotate.sh
+./src/autorotate.sh
 ```
-
-To have it start automatically, add it to your session's startup programs.
 
 ## How It Works
 
-1. **Sensor Monitoring:**  
-   The script starts `monitor-sensor` (from `iio-sensor-proxy`) and logs its output.
-
-2. **Log Watching:**  
-   It watches the log file for orientation changes using `inotifywait`.
-
-3. **Screen Rotation:**  
-   When orientation changes are detected, it calls the `rotate` function, which:
-   - Uses `xrandr` to rotate the screen.
-   - Uses `xinput` to remap touchscreen inputs to match the new orientation.
+1. **Configuration** – `src/autorotate.sh` sources `config/config.conf` to
+   read the display name and log path.
+2. **Library** – The rotation logic lives in `lib/rotate.sh` and is sourced by
+   the main script.
+3. **Sensor monitoring** – `monitor-sensor` (from `iio-sensor-proxy`) is
+   started and its output is appended to the log file.
+4. **Log watching** – `inotifywait` watches the log file for changes.
+5. **Screen rotation** – When an orientation change is detected, `rotate()` is
+   called, which:
+   - Uses `xrandr` to rotate the display.
+   - Uses `xinput --list --id-only` to discover all input devices and remaps
+     each one to the rotated display.
 
 ## Customization
 
-- **Display Name:**  
-  Set the `DNAME` variable to match your primary display (e.g., `eDP-1`). Find the value with `xrandr`.
-
-- **Touchscreen Device:**  
-  The script attempts to auto-detect your touchscreen by searching for "TouchScreen" in `xinput --list`. You may need to adjust this if your device uses a different name.
-
-- **Mapping Multiple Inputs:**  
-  The script currently maps up to 25 input devices. Adjust as needed for your hardware.
+| Setting   | File                 | Description                                  |
+|-----------|----------------------|----------------------------------------------|
+| `DNAME`   | `config/config.conf` | Display name (e.g. `eDP-1`). Find with `xrandr`. |
+| `LOG`     | `config/config.conf` | Path to the sensor log file.                 |
+| `DISPLAY` | `config/config.conf` | X display (default `:0`).                    |
 
 ## Troubleshooting
 
-- **No Rotation:**  
-  - Ensure `iio-sensor-proxy` is running and your device supports it.
-  - Test with `monitor-sensor` to check if orientation events are detected.
-  - Check your display and input device names.
-
-- **Touchscreen Not Working After Rotation:**  
-  - Manually check input device IDs with `xinput --list`.
-  - Edit the script to use the correct input device ID(s).
+- **No rotation detected** – Ensure `iio-sensor-proxy` is running and test
+  with `monitor-sensor` directly.
+- **Wrong display name** – Run `xrandr` and set `DNAME` in
+  `config/config.conf`.
+- **Touchscreen not remapped** – Run `xinput --list` to verify your device is
+  listed and that `xinput map-to-output` works for it.
 
 ## License
 
@@ -96,5 +130,7 @@ MIT License
 
 ## Acknowledgments
 
-- Original method inspired by [linuxappfinder.com blog](https://linuxappfinder.com/blog/auto_screen_rotation_in_ubuntu)
-- Thanks to the open-source community and [@Links2004](https://github.com/Links2004) for ispiration!
+- Original method inspired by
+  [linuxappfinder.com](https://linuxappfinder.com/blog/auto_screen_rotation_in_ubuntu)
+- Thanks to the open-source community and
+  [@Links2004](https://github.com/Links2004) for inspiration!
