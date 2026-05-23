@@ -36,22 +36,37 @@ source "$LIB_FILE"
 # Main
 # ---------------------------------------------------------------------------
 
+MONITOR_PID=""
+
+cleanup() {
+    if [ -n "$MONITOR_PID" ]; then
+        kill "$MONITOR_PID" 2>/dev/null || true
+    fi
+}
+trap cleanup EXIT INT TERM
+
 # Set default (upright) orientation on startup
 rotate normal
 
-# Stop any previously running monitor-sensor instance
-pkill -x monitor-sensor 2>/dev/null || true
+# Stop any previously running monitor-sensor instance started by this script
+LOCK_FILE="/run/user/$(id -u)/autorotate.lock"
+if [ -f "$LOCK_FILE" ]; then
+    OLD_PID=$(cat "$LOCK_FILE")
+    kill "$OLD_PID" 2>/dev/null || true
+fi
 
 # Clear the sensor log so it does not grow unbounded
 : > "$LOG"
 
 # Start monitor-sensor and append its output to the log
 monitor-sensor >> "$LOG" 2>&1 &
+MONITOR_PID=$!
+echo "$MONITOR_PID" > "$LOCK_FILE"
 
 # Watch the log for orientation changes.
 # Possible values: normal, bottom-up, right-up, left-up
 while inotifywait -e modify "$LOG"; do
-    ORIENTATION=$(tail -n 1 "$LOG" | grep 'orientation' | grep -oE '[^ ]+$')
+    ORIENTATION=$(tail -n 1 "$LOG" | grep 'orientation' | grep -oE '[^ ]+$' || true)
 
     if [ -n "$ORIENTATION" ]; then
         rotate "$ORIENTATION"

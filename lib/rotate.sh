@@ -15,7 +15,11 @@ rotate() {
     local NEW_ROT="normal"
     local CTM="1 0 0 0 1 0 0 0 1"
 
-    CUR_ROT=$(xrandr -q --verbose | grep "$DNAME" | cut -d" " -f6)
+    CUR_ROT=$(xrandr -q --verbose | grep -F "$DNAME" | cut -d" " -f6 || true)
+    if [ -z "$CUR_ROT" ]; then
+        echo "Error: display '$DNAME' not found. Run 'xrandr' to find the correct name." >&2
+        return 1
+    fi
 
     case "$ORIENTATION" in
         normal)
